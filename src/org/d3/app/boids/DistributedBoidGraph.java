@@ -1,15 +1,15 @@
 package org.d3.app.boids;
 
-import java.net.URI;
 import java.util.Collection;
 import java.util.LinkedList;
-import java.util.concurrent.locks.ReentrantLock;
 
 import org.d3.actor.Feature;
 import org.d3.actor.RemoteActor;
 import org.d3.annotation.Callable;
 import org.graphstream.boids.Boid;
 import org.graphstream.boids.BoidGraph;
+import org.graphstream.boids.BoidSpecies;
+import org.graphstream.boids.forces.distributed.DistributedForces;
 import org.miv.pherd.geom.Point3;
 import org.miv.pherd.geom.Vector3;
 
@@ -17,9 +17,9 @@ public class DistributedBoidGraph extends Feature {
 
 	public static final String CALLABLE_NEAR_OF = "boids.nearOf";
 	public static final String CALLABLE_NEW = "boids.new";
-	
+	public static final String CALLABLE_DEL = "boids.del";
+
 	BoidGraph localPart;
-	ReentrantLock lock;
 
 	protected DistributedBoidGraph(String id) {
 		super(id);
@@ -31,47 +31,56 @@ public class DistributedBoidGraph extends Feature {
 	}
 
 	@Callable(CALLABLE_NEAR_OF)
-	public Collection<URI> getBoidsNearOf(Point3 p, Vector3 pDir,
-			double viewZone, double angleOfView) {
-		LinkedList<Boid> boids = new LinkedList<Boid>();
+	public Collection<BoidData> getBoidsNearOf(BoidData data) {
+		LinkedList<BoidData> boids = new LinkedList<BoidData>();
+		BoidSpecies species = localPart.getOrCreateSpecies(data.speciesName);
 
 		for (Boid b : localPart.<Boid> getEachNode()) {
-			if (isVisible(p, b.getPosition(), pDir, viewZone, angleOfView))
-				boids.add(b);
+			if (isVisible(data, species, b.getPosition()))
+				boids.add(((DistributedForces) b.getForces()).getBoidData());
 		}
 
-		return null;
+		return boids;
 	}
 
 	@Callable(CALLABLE_NEW)
-	public void hostNewBoid(String boidId, Point3 position, Vector3 direction) {
+	public void hostNewBoid(BoidData data) {
 		Boid b;
-		
-		lock.lock();
-		b = localPart.addNode(boidId);
-		lock.unlock();
-		
-		b.getForces().setPosition(position.x, position.y, position.z);
-		b.getForces().getDirection().copy(direction);
-	}
-	
-	protected boolean isVisible(Point3 boid, Point3 point,
-			Vector3 boidDirection, double viewZone, double angleOfView) {
-		double d = boid.distance(point);
 
-		if (d <= viewZone) {
-			if (angleOfView > -1) {
+		if (data != null)
+			b = localPart.addNode(data.boidId);
+		else
+			b = localPart.addNode(localPart.getDefaultSpecies().createNewId());
+
+		if (data != null && data.position != null)
+			b.getForces().setPosition(data.position.x, data.position.y,
+					data.position.z);
+
+		if (data != null && data.direction != null)
+			b.getForces().getDirection().copy(data.direction);
+	}
+
+	public Iterable<RemoteActor> getEachPart() {
+		// TODO
+		return null;
+	}
+
+	protected boolean isVisible(BoidData boid, BoidSpecies species, Point3 point) {
+		double d = boid.position.distance(point);
+
+		if (d <= species.getViewZone()) {
+			if (species.getAngleOfView() > -1) {
 				double angle;
-				Vector3 dir = new Vector3(boidDirection);
-				Vector3 light = new Vector3(point.x - boid.x, point.y - boid.y,
-						point.z - boid.z);
+				Vector3 dir = new Vector3(boid.direction);
+				Vector3 light = new Vector3(point.x - boid.position.x, point.y
+						- boid.position.y, point.z - boid.position.z);
 
 				dir.normalize();
 				light.normalize();
 
 				angle = dir.dotProduct(light);
 
-				if (angle > angleOfView)
+				if (angle > species.getAngleOfView())
 					return true;
 			} else {
 				return true;
