@@ -3,8 +3,10 @@ package org.graphstream.boids.forces.distributed;
 import java.util.Collection;
 
 import org.d3.Actor;
+import org.d3.actor.CallException;
 import org.d3.actor.Future;
 import org.d3.app.boids.BoidData;
+import org.d3.app.boids.DistributedBoid;
 import org.d3.app.boids.DistributedBoidGraph;
 import org.graphstream.boids.Boid;
 import org.graphstream.boids.BoidForces;
@@ -19,12 +21,16 @@ public class DistributedForces extends BoidForces {
 	Actor distributedBoid;
 	Collection<BoidData> currentNeigh;
 	BoidData data;
+	Point3 nextPosition;
 
-	public DistributedForces(Boid b, BoidData data) {
+	public DistributedForces(Boid b) {
 		super(b);
 
-		this.data = data;
 		this.currentNeigh = null;
+	}
+
+	public void setBoidData(BoidData data) {
+		this.data = data;
 	}
 
 	public BoidData getBoidData() {
@@ -46,8 +52,7 @@ public class DistributedForces extends BoidForces {
 	 * @see org.graphstream.boids.BoidForces#getNextPosition()
 	 */
 	public Point3 getNextPosition() {
-		// TODO Auto-generated method stub
-		return null;
+		return nextPosition;
 	}
 
 	/*
@@ -56,8 +61,7 @@ public class DistributedForces extends BoidForces {
 	 * @see org.graphstream.boids.BoidForces#getPosition()
 	 */
 	public Point3 getPosition() {
-		// TODO Auto-generated method stub
-		return null;
+		return data.getPosition();
 	}
 
 	/*
@@ -66,8 +70,8 @@ public class DistributedForces extends BoidForces {
 	 * @see org.graphstream.boids.BoidForces#setPosition(double, double, double)
 	 */
 	public void setPosition(double x, double y, double z) {
-		// TODO Auto-generated method stub
-
+		data.getPosition().set(x, y, z);
+		boid.setAttribute("xyz", x, y, z);
 	}
 
 	/*
@@ -100,8 +104,6 @@ public class DistributedForces extends BoidForces {
 		if (neigh != null)
 			for (BoidData b : neigh)
 				actionWithNeighboor(b, rep);
-
-		checkNeighborhood();
 
 		if (countAtt > 0) {
 			barycenter.scale(1f / countAtt, 1f / countAtt, 1f / countAtt);
@@ -145,9 +147,26 @@ public class DistributedForces extends BoidForces {
 
 	protected void computeRemote() {
 		if (boid.getDegree() == 0) {
-			
+
 		} else {
 			Future f = new Future();
+			BoidData bd;
+			Point3 nextPos = getNextPosition();
+
+			distributedBoid.call(DistributedBoid.CALLABLE_GET_DATA, f);
+
+			try {
+				bd = f.getValue();
+
+				nextPos.copy(bd.getPosition());
+				getDirection().copy(bd.getDirection());
+
+				boid.setAttribute("xyz", nextPos.x, nextPos.y, nextPos.z);
+			} catch (CallException e) {
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
@@ -156,8 +175,8 @@ public class DistributedForces extends BoidForces {
 		Point3 p2 = b.getPosition();
 
 		BoidSpecies p1Species = boid.getSpecies();
-		BoidSpecies p2Species = ((BoidGraph) boid.getGraph())
-				.getOrCreateSpecies(b.getSpeciesName());
+		BoidSpecies p2Species = ((BoidGraph) boid.getGraph()).getSpecies(b
+				.getSpeciesName());
 
 		double v = boid.getSpecies().getViewZone();
 
@@ -185,7 +204,8 @@ public class DistributedForces extends BoidForces {
 		}
 	}
 
-	protected void checkNeighborhood() {
-		// TODO
+	public void setCurrentNeighborhood(Collection<BoidData> neigh) {
+		currentNeigh = neigh;
+		localPart.call(DistributedBoidGraph.CALLABLE_UPDATE_EDGES, boid, neigh);
 	}
 }

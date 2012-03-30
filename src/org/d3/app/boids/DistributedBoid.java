@@ -20,6 +20,7 @@ import org.d3.entity.migration.MigrationException;
 import org.d3.remote.RemoteAgency;
 import org.d3.tools.FutureToQueue;
 import org.graphstream.boids.Boid;
+import org.graphstream.boids.forces.distributed.DistributedForces;
 
 @ActorPath("/boids")
 public class DistributedBoid extends Entity {
@@ -37,9 +38,15 @@ public class DistributedBoid extends Entity {
 	@Migratable
 	protected BoidData data;
 
-	protected DistributedBoid(String id) {
+	public DistributedBoid(String id) {
+		this(id, null, null);
+	}
+
+	public DistributedBoid(String id, String part, BoidData data) {
 		super(id);
-		data = null;
+
+		this.data = data;
+		this.part = part;
 	}
 
 	/*
@@ -119,12 +126,18 @@ public class DistributedBoid extends Entity {
 			} catch (InterruptedException e) {
 			}
 		}
+
+		((DistributedForces) boid.getForces()).setCurrentNeighborhood(neigh);
+		boid.getForces().compute();
 	}
 
 	protected void initBoid() {
 		Future future = new Future();
 
-		boidGraph.call(DistributedBoidGraph.CALLABLE_NEW, future, data);
+		if (data == null)
+			throw new NullPointerException();
+
+		boidGraph.call(DistributedBoidGraph.CALLABLE_NEW, future, this, data);
 
 		try {
 			future.waitForValue();
@@ -134,8 +147,5 @@ public class DistributedBoid extends Entity {
 		} catch (CallException e) {
 			e.printStackTrace();
 		}
-
-		data.position = boid.getPosition();
-		data.direction = boid.getForces().getDirection();
 	}
 }
