@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.d3.ActorNotFoundException;
+import org.d3.Console;
 import org.d3.actor.ActorInternalException;
 import org.d3.actor.Agency;
 import org.d3.actor.CallException;
@@ -69,6 +70,8 @@ public class DistributedBoid extends Entity {
 		}
 
 		initBoid();
+
+		Console.info("boid '%s' started", boid.getId());
 	}
 
 	/*

@@ -4,20 +4,26 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.d3.Actor;
 import org.d3.ActorNotFoundException;
+import org.d3.Args;
+import org.d3.Console;
 import org.d3.actor.ActorInternalException;
 import org.d3.actor.Agency;
 import org.d3.actor.Feature;
 import org.d3.actor.RemoteActor;
 import org.d3.actor.UnregisteredActorException;
-import org.d3.agency.AgencyListener;
+import org.d3.annotation.ActorPath;
 import org.d3.annotation.Callable;
+import org.d3.events.Bindable;
+import org.d3.events.NonBindableActorException;
 import org.d3.remote.RemoteAgency;
+import org.d3.remote.RemoteEvent;
 import org.graphstream.boids.Boid;
 import org.graphstream.boids.BoidGraph;
 import org.graphstream.boids.BoidSpecies;
@@ -26,7 +32,8 @@ import org.graphstream.boids.forces.distributed.DistributedForcesFactory;
 import org.miv.pherd.geom.Point3;
 import org.miv.pherd.geom.Vector3;
 
-public class DistributedBoidGraph extends Feature {
+@ActorPath("/boids")
+public class DistributedBoidGraph extends Feature implements Bindable {
 
 	public static final String CALLABLE_NEAR_OF = "boids.nearOf";
 	public static final String CALLABLE_NEW = "boids.new";
@@ -38,12 +45,14 @@ public class DistributedBoidGraph extends Feature {
 	private String boidConfiguration;
 	private HashMap<Boid, DistributedBoid> boidDistribution;
 	private List<RemoteActor> remoteParts, unmutableRemoteParts;
-
-	protected DistributedBoidGraph(String id) {
+	private HashSet<String> remotePartsAgency;
+	
+	public DistributedBoidGraph(String id) {
 		super(id);
 
 		remoteParts = new CopyOnWriteArrayList<RemoteActor>();
 		unmutableRemoteParts = Collections.unmodifiableList(remoteParts);
+		remotePartsAgency = new HashSet<String>();
 	}
 
 	/*
@@ -52,8 +61,13 @@ public class DistributedBoidGraph extends Feature {
 	 * @see org.d3.actor.Feature#initFeature()
 	 */
 	public void initFeature() {
+		Args args = Agency.getArgs().getArgs(getArgsPrefix() + "." + getId());
+
 		localPart = new BoidGraph();
 		localPart.setForcesFactory(new DistributedForcesFactory(this));
+		localPart.display(false);
+		
+		boidConfiguration = args.get("configuration");
 
 		try {
 			localPart.loadDGSConfiguration(boidConfiguration);
@@ -62,6 +76,13 @@ public class DistributedBoidGraph extends Feature {
 		}
 
 		boidDistribution = new HashMap<Boid, DistributedBoid>();
+
+		try {
+			Agency.getLocalAgency().getRemoteHosts().getEventDispatcher()
+					.bind();
+		} catch (NonBindableActorException e) {
+			Console.exception(e);
+		}
 
 		for (Boid b : localPart.<Boid> getEachNode()) {
 			BoidData data = new BoidData(b.getId(), b.getSpecies().getName());
@@ -173,73 +194,43 @@ public class DistributedBoidGraph extends Feature {
 		return false;
 	}
 
-	class RemotePartUpdater implements AgencyListener {
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see org.d3.agency.AgencyListener#agencyExit(org.d3.actor.Agency)
-		 */
-		public void agencyExit(Agency agency) {
-			// TODO Auto-generated method stub
+	public <K extends Enum<K>> void trigger(K event, Object... data) {
+		if (event instanceof RemoteEvent) {
+			RemoteEvent rEvent = (RemoteEvent) event;
+			RemoteAgency ra;
 
-		}
+			switch (rEvent) {
+			case REMOTE_AGENCY_REGISTERED:
+				ra = (RemoteAgency) data[0];
 
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.d3.agency.AgencyListener#identifiableObjectRegistered(org.d3.
-		 * Actor)
-		 */
-		public void identifiableObjectRegistered(Actor idObject) {
-			// TODO Auto-generated method stub
+				if (!remotePartsAgency.contains(ra.getId())) {
+					RemoteActor remotePart;
 
-		}
+					try {
+						remotePart = ra
+								.getRemoteActor(DistributedBoidGraph.this
+										.getFullPath());
+						remoteParts.add(remotePart);
 
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.d3.agency.AgencyListener#identifiableObjectUnregistered(org.d3
-		 * .Actor)
-		 */
-		public void identifiableObjectUnregistered(Actor idObject) {
-			// TODO Auto-generated method stub
+						Console.info("new boid part found @ %s", ra
+								.getRemoteHost());
+					} catch (ActorNotFoundException e) {
+						// No boid part on this agency
+						Console.exception(e); // XXX debug only
+					}
+				}
 
-		}
+				break;
+			case REMOTE_AGENCY_UNREGISTERED:
+				ra = (RemoteAgency) data[0];
 
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @seeorg.d3.agency.AgencyListener#newAgencyRegistered(org.d3.remote.
-		 * RemoteAgency)
-		 */
-		public void newAgencyRegistered(RemoteAgency rad) {
-			// TODO Auto-generated method stub
+				if (remotePartsAgency.contains(ra.getId())) {
+					remoteParts.remove(ra);
+					remotePartsAgency.remove(ra.getId());
+				}
 
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see
-		 * org.d3.agency.AgencyListener#remoteAgencyDescriptionUpdated(org.d3
-		 * .remote.RemoteAgency)
-		 */
-		public void remoteAgencyDescriptionUpdated(RemoteAgency rad) {
-			// TODO Auto-generated method stub
-
-		}
-
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see org.d3.agency.AgencyListener#requestReceived(org.d3.Actor,
-		 * org.d3.Actor, java.lang.String)
-		 */
-		public void requestReceived(Actor source, Actor target, String name) {
-			// TODO Auto-generated method stub
-
+				break;
+			}
 		}
 	}
 }
