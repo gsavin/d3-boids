@@ -15,7 +15,7 @@ cg ui.stylesheet="node { size: 4px; } node.moustik { fill-color: #1d1d1d; } edge
 cg boids.max_steps=8000
 cg boids.random_seed=2132134879
 cg boids.area=1
-cg boids.sleep_time=30
+cg boids.sleep_time=3
 
 #
 # Moustik species
@@ -37,4 +37,4 @@ cg boids.species.moustik.add_species_name_in_ui_class=true # Tell species to add
 #
 # This last command create 100 boids of the moustik species
 #
-cg boids.species.moustik.count=2
+cg boids.species.moustik.count=100

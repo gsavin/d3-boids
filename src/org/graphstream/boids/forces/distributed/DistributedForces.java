@@ -3,6 +3,7 @@ package org.graphstream.boids.forces.distributed;
 import java.util.Collection;
 
 import org.d3.Actor;
+import org.d3.Console;
 import org.d3.actor.CallException;
 import org.d3.actor.Future;
 import org.d3.app.boids.BoidData;
@@ -23,18 +24,25 @@ public class DistributedForces extends BoidForces {
 	BoidData data;
 	Point3 nextPosition;
 
-	public DistributedForces(Boid b) {
+	public DistributedForces(DistributedBoidGraph localPart, Boid b) {
 		super(b);
 
 		this.currentNeigh = null;
+		this.localPart = localPart;
+		this.nextPosition = new Point3();
 	}
 
 	public void setBoidData(BoidData data) {
 		this.data = data;
+		this.dir = data.getDirection();
 	}
 
 	public BoidData getBoidData() {
 		return data;
+	}
+
+	public void setActor(Actor actor) {
+		distributedBoid = actor;
 	}
 
 	/*
@@ -71,7 +79,6 @@ public class DistributedForces extends BoidForces {
 	 */
 	public void setPosition(double x, double y, double z) {
 		data.getPosition().set(x, y, z);
-		boid.setAttribute("xyz", x, y, z);
 	}
 
 	/*
@@ -85,6 +92,8 @@ public class DistributedForces extends BoidForces {
 			computeRemote();
 		else
 			computeLocal();
+		
+		localPart.call(DistributedBoidGraph.CALLABLE_UPDATE_BOID, boid, currentNeigh);
 	}
 
 	public void computeLocal() {
@@ -94,6 +103,7 @@ public class DistributedForces extends BoidForces {
 		Vector3 rep = new Vector3();
 		Point3 nextPos = getNextPosition();
 
+		nextPos.copy(data.getPosition());
 		barycenter.set(0, 0, 0);
 		direction.fill(0);
 		attraction.fill(0);
@@ -141,8 +151,6 @@ public class DistributedForces extends BoidForces {
 
 		checkWalls();
 		nextPos.move(dir);
-
-		boid.setAttribute("xyz", nextPos.x, nextPos.y, nextPos.z);
 	}
 
 	protected void computeRemote() {
@@ -160,12 +168,10 @@ public class DistributedForces extends BoidForces {
 
 				nextPos.copy(bd.getPosition());
 				getDirection().copy(bd.getDirection());
-
-				boid.setAttribute("xyz", nextPos.x, nextPos.y, nextPos.z);
 			} catch (CallException e) {
-				e.printStackTrace();
+				Console.exception(e);
 			} catch (InterruptedException e) {
-				e.printStackTrace();
+				Console.exception(e);
 			}
 		}
 	}
@@ -206,6 +212,5 @@ public class DistributedForces extends BoidForces {
 
 	public void setCurrentNeighborhood(Collection<BoidData> neigh) {
 		currentNeigh = neigh;
-		localPart.call(DistributedBoidGraph.CALLABLE_UPDATE_EDGES, boid, neigh);
 	}
 }

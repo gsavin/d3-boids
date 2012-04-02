@@ -22,7 +22,7 @@ public class DistributedForcesFactory implements BoidForcesFactory {
 	 * .boids.Boid)
 	 */
 	public BoidForces createNewForces(Boid b) {
-		return new DistributedForces(b);
+		return new DistributedForces(localPart, b);
 	}
 
 	/*

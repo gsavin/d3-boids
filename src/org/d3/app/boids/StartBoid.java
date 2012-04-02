@@ -9,5 +9,4 @@ public class StartBoid {
 	public static void main(String[] args) {
 		StartD3.main(args);
 	}
-
 }

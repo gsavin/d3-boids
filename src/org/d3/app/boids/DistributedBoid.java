@@ -16,18 +16,22 @@ import org.d3.actor.RemoteActor;
 import org.d3.actor.UnregisteredActorException;
 import org.d3.annotation.ActorPath;
 import org.d3.annotation.Callable;
+import org.d3.annotation.Direct;
+import org.d3.annotation.Local;
 import org.d3.entity.Migratable;
 import org.d3.entity.migration.MigrationException;
 import org.d3.remote.RemoteAgency;
 import org.d3.tools.FutureToQueue;
 import org.graphstream.boids.Boid;
 import org.graphstream.boids.forces.distributed.DistributedForces;
+import org.miv.pherd.geom.Point3;
 
 @ActorPath("/boids")
 public class DistributedBoid extends Entity {
 	private static final long serialVersionUID = 254153604563418868L;
 
 	public static final String CALLABLE_STEP = "boid.step";
+	public static final String CALLABLE_SWAP = "boid.swap";
 	public static final String CALLABLE_GET_DATA = "boid.data";
 
 	protected Boid boid;
@@ -58,7 +62,7 @@ public class DistributedBoid extends Entity {
 	@Override
 	public void initEntity() {
 		LocalActor ac;
-		String path = "/boids/graph/" + part;
+		String path = "/boids/" + part;
 
 		try {
 			ac = Agency.getLocalAgency().getActors().get(path);
@@ -69,9 +73,10 @@ public class DistributedBoid extends Entity {
 			throw new ActorInternalException(e);
 		}
 
+		data.setURI(getURI());
 		initBoid();
 
-		Console.info("boid '%s' started", boid.getId());
+		Console.info("started");
 	}
 
 	/*
@@ -95,16 +100,27 @@ public class DistributedBoid extends Entity {
 		initBoid();
 	}
 
+	@Direct
 	@Callable(CALLABLE_GET_DATA)
 	public BoidData getBoidData() {
 		return data;
 	}
 
+	@Local
+	@Callable(CALLABLE_SWAP)
+	public void swapPosition() {
+		Point3 p = boid.getForces().getNextPosition();
+		boid.setPosition(p.x, p.y, p.z);
+	}
+	
+	@Local
 	@Callable(CALLABLE_STEP)
 	public void step() {
 		LinkedList<BoidData> neigh = new LinkedList<BoidData>();
 		LinkedBlockingQueue<Future> queue = new LinkedBlockingQueue<Future>();
 		int size = 1;
+
+		//Console.info("step");
 
 		boidGraph.call(DistributedBoidGraph.CALLABLE_NEAR_OF,
 				new FutureToQueue(queue), data);
@@ -124,14 +140,22 @@ public class DistributedBoid extends Entity {
 					Collection<BoidData> c = f.getValue();
 					neigh.addAll(c);
 				} catch (CallException e) {
-					e.printStackTrace();
+					Console.exception(e);
 				}
 			} catch (InterruptedException e) {
+				Console.exception(e);
 			}
 		}
 
-		((DistributedForces) boid.getForces()).setCurrentNeighborhood(neigh);
-		boid.getForces().compute();
+		//Console.info("step (size=%d, neigh=%d)", s1, neigh.size());
+
+		try {
+			((DistributedForces) boid.getForces())
+					.setCurrentNeighborhood(neigh);
+			boid.getForces().compute();
+		} catch (Throwable t) {
+			t.printStackTrace();
+		}
 	}
 
 	protected void initBoid() {

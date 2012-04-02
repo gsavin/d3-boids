@@ -3,10 +3,11 @@ package org.d3.app.boids;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.d3.Actor;
@@ -15,15 +16,19 @@ import org.d3.Args;
 import org.d3.Console;
 import org.d3.actor.ActorInternalException;
 import org.d3.actor.Agency;
+import org.d3.actor.CallException;
 import org.d3.actor.Feature;
+import org.d3.actor.Future;
 import org.d3.actor.RemoteActor;
 import org.d3.actor.UnregisteredActorException;
 import org.d3.annotation.ActorPath;
 import org.d3.annotation.Callable;
+import org.d3.annotation.Local;
 import org.d3.events.Bindable;
 import org.d3.events.NonBindableActorException;
 import org.d3.remote.RemoteAgency;
 import org.d3.remote.RemoteEvent;
+import org.d3.tools.FutureGroup;
 import org.graphstream.boids.Boid;
 import org.graphstream.boids.BoidGraph;
 import org.graphstream.boids.BoidSpecies;
@@ -39,14 +44,15 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 	public static final String CALLABLE_NEW = "boids.new";
 	public static final String CALLABLE_DEL = "boids.del";
 	public static final String CALLABLE_GET = "boids.get";
-	public static final String CALLABLE_UPDATE_EDGES = "boids.update.edges";
+	public static final String CALLABLE_UPDATE_BOID = "boids.update.boid";
 
 	private BoidGraph localPart;
 	private String boidConfiguration;
-	private HashMap<Boid, DistributedBoid> boidDistribution;
+	private Map<Boid, DistributedBoid> boidDistribution;
 	private List<RemoteActor> remoteParts, unmutableRemoteParts;
 	private HashSet<String> remotePartsAgency;
-	
+	private DistributedBoidController controller;
+
 	public DistributedBoidGraph(String id) {
 		super(id);
 
@@ -62,11 +68,16 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 	 */
 	public void initFeature() {
 		Args args = Agency.getArgs().getArgs(getArgsPrefix() + "." + getId());
+		Point3 lo;
+		Point3 hi;
 
 		localPart = new BoidGraph();
 		localPart.setForcesFactory(new DistributedForcesFactory(this));
 		localPart.display(false);
-		
+
+		lo = localPart.getLowAnchor();
+		hi = localPart.getHighAnchor();
+
 		boidConfiguration = args.get("configuration");
 
 		try {
@@ -75,7 +86,7 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 			e.printStackTrace();
 		}
 
-		boidDistribution = new HashMap<Boid, DistributedBoid>();
+		boidDistribution = new ConcurrentHashMap<Boid, DistributedBoid>();
 
 		try {
 			Agency.getLocalAgency().getRemoteHosts().getEventDispatcher()
@@ -86,16 +97,74 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 
 		for (Boid b : localPart.<Boid> getEachNode()) {
 			BoidData data = new BoidData(b.getId(), b.getSpecies().getName());
-			new DistributedBoid(b.getId(), getId(), data);
+			DistributedBoid db = new DistributedBoid(b.getId(), getId(), data);
+
+			data.position.x = localPart.getRandom().nextDouble()
+					* (hi.x - lo.x) + lo.x;
+			data.position.y = localPart.getRandom().nextDouble()
+					* (hi.y - lo.y) + lo.y;
+			data.position.z = 0;
+
+			data.direction.data[0] = localPart.getRandom().nextDouble() * 2 - 1;
+			data.direction.data[1] = localPart.getRandom().nextDouble() * 2 - 1;
+			data.direction.data[2] = 0;
+
+			db.init();
 		}
+
+		controller = new DistributedBoidController(this);
+		controller.init();
 	}
 
 	public Iterable<RemoteActor> getEachPart() {
 		return unmutableRemoteParts;
 	}
 
-	public void step() {
+	public long getSleepTime() {
+		return localPart.getSleepTime();
+	}
 
+	public void step() {
+		FutureGroup fg = new FutureGroup(FutureGroup.Policy.WAIT_FOR_ALL);
+		int count = 0;
+
+		//Console.info("step started");
+
+		for (DistributedBoid db : boidDistribution.values()) {
+			Future f = new Future();
+
+			db.call(DistributedBoid.CALLABLE_STEP, f);
+			fg.put(f);
+
+			count++;
+		}
+
+		try {
+			fg.await();
+			fg.check();
+		} catch (InterruptedException e) {
+			Console.exception(e);
+		} catch (CallException e) {
+			Console.exception(e);
+		}
+
+		for (DistributedBoid db : boidDistribution.values()) {
+			Future f = new Future();
+
+			db.call(DistributedBoid.CALLABLE_SWAP, f);
+			fg.put(f);
+		}
+
+		try {
+			fg.await();
+			fg.check();
+		} catch (InterruptedException e) {
+			Console.exception(e);
+		} catch (CallException e) {
+			Console.exception(e);
+		}
+
+		//Console.info("step ended (%s boids)", count);
 	}
 
 	@Callable(CALLABLE_NEAR_OF)
@@ -113,6 +182,7 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 		return boids;
 	}
 
+	@Local
 	@Callable(CALLABLE_NEW)
 	public Boid hostNewBoid(DistributedBoid dBoid, BoidData data) {
 		checkActorThreadAccess();
@@ -124,6 +194,7 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 
 		boidDistribution.put(b, dBoid);
 		((DistributedForces) b.getForces()).setBoidData(data);
+		((DistributedForces) b.getForces()).setActor(dBoid);
 
 		return b;
 	}
@@ -149,9 +220,9 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 						throw new ActorInternalException("WTF?");
 					}
 				} catch (ActorNotFoundException e) {
-					e.printStackTrace();
+					Console.exception(e);
 				} catch (UnregisteredActorException e) {
-					e.printStackTrace();
+					Console.exception(e);
 				}
 			}
 
@@ -161,12 +232,18 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 		return boids;
 	}
 
-	@Callable(CALLABLE_UPDATE_EDGES)
-	public void updateEdges(Boid b, Collection<BoidData> neigh) {
+	@Local
+	@Callable(CALLABLE_UPDATE_BOID)
+	public void updateBoid(Boid b, Collection<BoidData> neigh) {
 		checkActorThreadAccess();
+		Point3 p = b.getPosition();
 
-		Collection<Boid> boids = getBoids(neigh);
-		b.checkNeighborhood(boids.toArray(new Boid[boids.size()]));
+		if (neigh != null) {
+			Collection<Boid> boids = getBoids(neigh);
+			b.checkNeighborhood(boids.toArray(new Boid[boids.size()]));
+		}
+
+		b.setAttribute("xyz", p.x, p.y, p.z);
 	}
 
 	protected boolean isVisible(BoidData boid, BoidSpecies species, Point3 point) {

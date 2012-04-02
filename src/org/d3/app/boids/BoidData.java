@@ -8,7 +8,7 @@ import org.miv.pherd.geom.Vector3;
 
 public class BoidData implements Serializable {
 	private static final long serialVersionUID = 6561361450638974214L;
-
+	
 	String boidId;
 	String speciesName;
 	Point3 position;
