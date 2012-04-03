@@ -278,8 +278,8 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 	}
 
 	public <K extends Enum<K>> void trigger(K event, Object... data) {
-		if (event instanceof RemoteEvent) {
-			RemoteEvent rEvent = (RemoteEvent) event;
+		if (RemoteEvent.class.isAssignableFrom(event.getClass())) {
+			RemoteEvent rEvent = RemoteEvent.class.cast(event);
 			RemoteAgency ra;
 
 			switch (rEvent) {
