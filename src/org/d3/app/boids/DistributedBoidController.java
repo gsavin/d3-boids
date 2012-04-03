@@ -9,10 +9,16 @@ import org.d3.actor.StepActor;
 public class DistributedBoidController extends Feature implements StepActor {
 
 	DistributedBoidGraph ctx;
+	long averageStepTime;
+	long lastOutput;
+	int step;
 
 	public DistributedBoidController(DistributedBoidGraph ctx) {
 		super(ctx.getId() + "-controller");
 		this.ctx = ctx;
+		this.averageStepTime = 0;
+		this.step = 0;
+		this.lastOutput = 0;
 	}
 
 	/*
@@ -44,7 +50,13 @@ public class DistributedBoidController extends Feature implements StepActor {
 		ctx.step();
 		m2 = System.currentTimeMillis();
 
-		Console.info("step in %dms", m2 - m1);
+		averageStepTime += m2 - m1;
+		step++;
+
+		if (m2 - lastOutput > 1000) {
+			Console.info("average step time is %dms", averageStepTime / step);
+			lastOutput = m2;
+		}
 	}
 
 }

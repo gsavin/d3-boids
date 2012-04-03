@@ -70,10 +70,16 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 		Args args = Agency.getArgs().getArgs(getArgsPrefix() + "." + getId());
 		Point3 lo;
 		Point3 hi;
+		boolean display = false;
+
+		if (args.has("display"))
+			display = args.getBoolean("display");
 
 		localPart = new BoidGraph();
 		localPart.setForcesFactory(new DistributedForcesFactory(this));
-		localPart.display(false);
+
+		if (display)
+			localPart.display(false);
 
 		lo = localPart.getLowAnchor();
 		hi = localPart.getHighAnchor();
@@ -128,7 +134,7 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 		FutureGroup fg = new FutureGroup(FutureGroup.Policy.WAIT_FOR_ALL);
 		int count = 0;
 
-		//Console.info("step started");
+		// Console.info("step started");
 
 		for (DistributedBoid db : boidDistribution.values()) {
 			Future f = new Future();
@@ -164,7 +170,7 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 			Console.exception(e);
 		}
 
-		//Console.info("step ended (%s boids)", count);
+		// Console.info("step ended (%s boids)", count);
 	}
 
 	@Callable(CALLABLE_NEAR_OF)
