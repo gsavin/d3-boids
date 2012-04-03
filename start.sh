@@ -6,7 +6,7 @@ else
 	CFG="$1"
 fi
 
-M2="/home/raziel/.m2/repository"
+M2="$HOME/.m2/repository"
 LIBS="$M2/org/graphstream/gs-core/1.2-git/gs-core-1.2-git.jar \
 $M2/org/graphstream/gs-algo/1.2-git/gs-algo-1.2-git.jar \
 $M2/org/graphstream/gs-boids/git/gs-boids-git.jar \
