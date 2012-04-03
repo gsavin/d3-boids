@@ -37,4 +37,4 @@ cg boids.species.moustik.add_species_name_in_ui_class=true # Tell species to add
 #
 # This last command create 100 boids of the moustik species
 #
-cg boids.species.moustik.count=10000
+cg boids.species.moustik.count=100
