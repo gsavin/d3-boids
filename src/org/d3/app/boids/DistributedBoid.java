@@ -76,7 +76,7 @@ public class DistributedBoid extends Entity {
 		data.setURI(getURI());
 		initBoid();
 
-		Console.info("started");
+		Console.info("started on part %s", path);
 	}
 
 	/*
@@ -118,7 +118,7 @@ public class DistributedBoid extends Entity {
 	public void step() {
 		LinkedList<BoidData> neigh = new LinkedList<BoidData>();
 		LinkedBlockingQueue<Future> queue = new LinkedBlockingQueue<Future>();
-		int size = 1;
+		int size = 1, s1;
 
 		//Console.info("step");
 
@@ -131,6 +131,8 @@ public class DistributedBoid extends Entity {
 			size++;
 		}
 
+		s1 = size;
+		
 		while (size > 0) {
 			try {
 				Future f = queue.take();
@@ -147,7 +149,7 @@ public class DistributedBoid extends Entity {
 			}
 		}
 
-		//Console.info("step (size=%d, neigh=%d)", s1, neigh.size());
+		Console.info("step (size=%d, neigh=%d)", s1, neigh.size());
 
 		try {
 			((DistributedForces) boid.getForces())

@@ -69,6 +69,12 @@ public class DistributedForces extends BoidForces {
 	 * @see org.graphstream.boids.BoidForces#getPosition()
 	 */
 	public Point3 getPosition() {
+		if (distributedBoid == null)
+			Console.error("actor is null for %s (%x)", boid.getId(), System
+					.identityHashCode(this));
+		if (data == null)
+			Console.error("data is null for %s (%x)", distributedBoid.getId(),
+					System.identityHashCode(this));
 		return data.getPosition();
 	}
 
@@ -92,8 +98,9 @@ public class DistributedForces extends BoidForces {
 			computeRemote();
 		else
 			computeLocal();
-		
-		localPart.call(DistributedBoidGraph.CALLABLE_UPDATE_BOID, boid, currentNeigh);
+
+		localPart.call(DistributedBoidGraph.CALLABLE_UPDATE_BOID, boid,
+				currentNeigh);
 	}
 
 	public void computeLocal() {

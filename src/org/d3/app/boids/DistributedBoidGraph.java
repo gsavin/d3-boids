@@ -28,6 +28,7 @@ import org.d3.events.Bindable;
 import org.d3.events.NonBindableActorException;
 import org.d3.remote.RemoteAgency;
 import org.d3.remote.RemoteEvent;
+import org.d3.remote.RemoteHost;
 import org.d3.tools.FutureGroup;
 import org.graphstream.boids.Boid;
 import org.graphstream.boids.BoidGraph;
@@ -118,6 +119,11 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 			db.init();
 		}
 
+		for (RemoteHost rh : Agency.getLocalAgency().getRemoteHosts()) {
+			for (RemoteAgency ra : rh)
+				lookForNewPart(ra);
+		}
+
 		controller = new DistributedBoidController(this);
 		controller.init();
 	}
@@ -181,7 +187,8 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 		BoidSpecies species = localPart.getOrCreateSpecies(data.speciesName);
 
 		for (Boid b : localPart.<Boid> getEachNode()) {
-			if (isVisible(data, species, b.getPosition()))
+			if (isVisible(data, species, b.getPosition())
+					&& !b.hasAttribute("remote"))
 				boids.add(((DistributedForces) b.getForces()).getBoidData());
 		}
 
@@ -222,6 +229,8 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 					if (a.isRemote()) {
 						b = localPart.addNode(bd.getBoidId());
 						b.addAttribute("remote");
+						((DistributedForces) b.getForces()).setBoidData(bd);
+						((DistributedForces) b.getForces()).setActor(a);
 					} else {
 						throw new ActorInternalException("WTF?");
 					}
@@ -284,24 +293,9 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 
 			switch (rEvent) {
 			case REMOTE_AGENCY_REGISTERED:
+			case REMOTE_AGENCY_UPDATED:
 				ra = (RemoteAgency) data[0];
-
-				if (!remotePartsAgency.contains(ra.getId())) {
-					RemoteActor remotePart;
-
-					try {
-						remotePart = ra
-								.getRemoteActor(DistributedBoidGraph.this
-										.getFullPath());
-						remoteParts.add(remotePart);
-
-						Console.info("new boid part found @ %s", ra
-								.getRemoteHost());
-					} catch (ActorNotFoundException e) {
-						// No boid part on this agency
-						Console.exception(e); // XXX debug only
-					}
-				}
+				lookForNewPart(ra);
 
 				break;
 			case REMOTE_AGENCY_UNREGISTERED:
@@ -313,6 +307,24 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 				}
 
 				break;
+			}
+		}
+	}
+
+	protected void lookForNewPart(RemoteAgency ra) {
+		if (!remotePartsAgency.contains(ra.getId())) {
+			RemoteActor remotePart;
+
+			try {
+				remotePart = ra.getRemoteActor(DistributedBoidGraph.this
+						.getFullPath());
+				remoteParts.add(remotePart);
+				remotePartsAgency.add(remotePart.getAgencyId());
+
+				Console.info("new boid part found %s", remotePart.getURI());
+			} catch (ActorNotFoundException e) {
+				// No boid part on this agency
+				Console.warning("no boid part on '%s'", ra.getId());
 			}
 		}
 	}
