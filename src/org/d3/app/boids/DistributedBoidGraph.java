@@ -31,6 +31,7 @@ import org.d3.remote.RemoteEvent;
 import org.d3.remote.RemoteHost;
 import org.d3.tools.FutureGroup;
 import org.graphstream.boids.Boid;
+import org.graphstream.boids.BoidForces;
 import org.graphstream.boids.BoidGraph;
 import org.graphstream.boids.BoidSpecies;
 import org.graphstream.boids.forces.distributed.DistributedForces;
@@ -137,6 +138,8 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 	}
 
 	public void step() {
+		controller.checkBodyThreadAccess();
+
 		FutureGroup fg = new FutureGroup(FutureGroup.Policy.WAIT_FOR_ALL);
 		int count = 0;
 
@@ -160,21 +163,37 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 			Console.exception(e);
 		}
 
-		for (DistributedBoid db : boidDistribution.values()) {
-			Future f = new Future();
+		// for (DistributedBoid db : boidDistribution.values()) {
+		// Future f = new Future();
+		//
+		// db.call(DistributedBoid.CALLABLE_SWAP, f);
+		// fg.put(f);
+		// }
 
-			db.call(DistributedBoid.CALLABLE_SWAP, f);
-			fg.put(f);
+		// try {
+		// fg.await();
+		// fg.check();
+		// } catch (InterruptedException e) {
+		// Console.exception(e);
+		// } catch (CallException e) {
+		// Console.exception(e);
+		// }
+
+		LinkedList<Boid> toRemove = new LinkedList<Boid>();
+
+		for (Boid b : localPart.<Boid> getEachNode()) {
+			BoidForces bf = b.getForces();
+			Point3 next = bf.getNextPosition();
+			bf.setPosition(next.x, next.y, next.z);
+
+			if (b.hasAttribute("remote") && b.getDegree() == 0) {
+				toRemove.add(b);
+				Console.warning("remove remote boid '%s'", b.getId());
+			}
 		}
 
-		try {
-			fg.await();
-			fg.check();
-		} catch (InterruptedException e) {
-			Console.exception(e);
-		} catch (CallException e) {
-			Console.exception(e);
-		}
+		while (toRemove.size() > 0)
+			localPart.removeNode(toRemove.poll());
 
 		// Console.info("step ended (%s boids)", count);
 	}
@@ -212,6 +231,7 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 		return b;
 	}
 
+	@Local
 	@Callable(CALLABLE_GET)
 	public Collection<Boid> getBoids(Collection<BoidData> neigh) {
 		checkActorThreadAccess();
@@ -227,10 +247,14 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 							bd.getURI());
 
 					if (a.isRemote()) {
+						Console.warning("add remote boid '%s'", bd.getBoidId());
 						b = localPart.addNode(bd.getBoidId());
 						b.addAttribute("remote");
+						b.addAttribute("ui.class", "remote");
 						((DistributedForces) b.getForces()).setBoidData(bd);
 						((DistributedForces) b.getForces()).setActor(a);
+						b.setAttribute("xyz", bd.position.x, bd.position.y,
+								bd.position.z);
 					} else {
 						throw new ActorInternalException("WTF?");
 					}
@@ -239,6 +263,11 @@ public class DistributedBoidGraph extends Feature implements Bindable {
 				} catch (UnregisteredActorException e) {
 					Console.exception(e);
 				}
+			} else if (b.hasAttribute("remote")) {
+				b.getForces().setPosition(bd.position.x, bd.position.y,
+						bd.position.z);
+				b.setAttribute("xyz", bd.position.x, bd.position.y,
+						bd.position.z);
 			}
 
 			boids.add(b);

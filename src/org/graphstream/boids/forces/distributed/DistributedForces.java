@@ -103,7 +103,7 @@ public class DistributedForces extends BoidForces {
 				currentNeigh);
 	}
 
-	public void computeLocal() {
+	protected void computeLocal() {
 		Collection<BoidData> neigh = currentNeigh;
 		BoidSpecies species = boid.getSpecies();
 		Vector3 dir = getDirection();
@@ -161,9 +161,7 @@ public class DistributedForces extends BoidForces {
 	}
 
 	protected void computeRemote() {
-		if (boid.getDegree() == 0) {
-
-		} else {
+		if (boid.getDegree() > 0) {
 			Future f = new Future();
 			BoidData bd;
 			Point3 nextPos = getNextPosition();

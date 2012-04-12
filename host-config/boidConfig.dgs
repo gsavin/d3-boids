@@ -2,12 +2,12 @@ DGS004
 null 0 0
 
 cg ui.quality ui.antialias
-cg ui.stylesheet="node { size: 4px; } node.moustik { fill-color: #1d1d1d; } edge { fill-color: grey; }"
+cg ui.stylesheet="node { size: 4px; } node.remote { fill-color: red; size: 6px; } node.moustik { fill-color: #1d1d1d; } edge { fill-color: grey; }"
 
 cg boids.max_steps=8000
 cg boids.random_seed=2132134879
 cg boids.area=1
-cg boids.sleep_time=3000
+cg boids.sleep_time=100
 
 cg boids.species.moustik=org.graphstream.boids.BoidSpecies # Create a new species using class BoidSpecies
 cg boids.species.moustik.angle_of_view=0                   # Set angleOfView of this species to 0

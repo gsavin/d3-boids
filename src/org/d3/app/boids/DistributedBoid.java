@@ -118,9 +118,7 @@ public class DistributedBoid extends Entity {
 	public void step() {
 		LinkedList<BoidData> neigh = new LinkedList<BoidData>();
 		LinkedBlockingQueue<Future> queue = new LinkedBlockingQueue<Future>();
-		int size = 1, s1;
-
-		//Console.info("step");
+		int size = 1;
 
 		boidGraph.call(DistributedBoidGraph.CALLABLE_NEAR_OF,
 				new FutureToQueue(queue), data);
@@ -130,8 +128,6 @@ public class DistributedBoid extends Entity {
 					new FutureToQueue(queue), data);
 			size++;
 		}
-
-		s1 = size;
 		
 		while (size > 0) {
 			try {
@@ -149,7 +145,7 @@ public class DistributedBoid extends Entity {
 			}
 		}
 
-		Console.info("step (size=%d, neigh=%d)", s1, neigh.size());
+		//Console.info("step (size=%d, neigh=%d)", s1, neigh.size());
 
 		try {
 			((DistributedForces) boid.getForces())
